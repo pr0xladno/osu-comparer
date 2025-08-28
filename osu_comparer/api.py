@@ -78,7 +78,9 @@ async def get_user_score_on_beatmap(user_id: int, beatmap_id: int) -> Score | No
         Score | None: The user's score, or None if no score is found
     """
     try:
-        score = await api.beatmap_user_score(user_id=user_id, beatmap_id=beatmap_id)
-        return score.score  # a BeatmapUserScore quirk
+        scores = await api.beatmap_user_scores(user_id=user_id, beatmap_id=beatmap_id)
+        if not scores:
+            return None
+        return max(scores, key=lambda s: s.pp or 0)
     except ValueError:
         return None
