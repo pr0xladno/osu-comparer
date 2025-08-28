@@ -6,6 +6,8 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
     QHBoxLayout,
     QLabel,
+    QMenu,
+    QWidgetAction,
     QLineEdit,
     QPushButton,
     QTableWidget,
@@ -15,6 +17,7 @@ from PyQt6.QtWidgets import (
     QHeaderView,
 )
 from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QAction
 from qasync import QEventLoop, asyncSlot
 from osu_comparer.api import (
     fetch_beatmap_info,
@@ -27,6 +30,21 @@ from osu_comparer.models import Comparison
 from osu_comparer.utils import make_score_url, mods_to_str
 
 DEFAULT_LIMIT = 100
+
+
+class NumericTableWidgetItem(
+    QTableWidgetItem
+):  # pyqt6 is shit why do i HAVE to do this
+    def __lt__(self, other):
+        try:
+            self_data = self.data(Qt.ItemDataRole.UserRole)
+            other_data = other.data(Qt.ItemDataRole.UserRole)
+            if self_data is not None and other_data is not None:
+                return self_data < other_data
+        except Exception:
+            pass
+        # fallback to default string comparison
+        return super().__lt__(other)
 
 
 class OsuComparerGUI(QWidget):
@@ -63,17 +81,18 @@ class OsuComparerGUI(QWidget):
         layout.addWidget(self.progress_bar)
 
         # Results table
-        self.table = QTableWidget(0, 10)
+        self.table = QTableWidget(0, 11)
         self.table.setHorizontalHeaderLabels(
             [
                 "Beatmap",
                 "Difficulty",
                 "User A PP",
-                "User A Accuracy",
-                "User A Mods",
                 "User B PP",
+                "User A Accuracy",
                 "User B Accuracy",
+                "User A Mods",
                 "User B Mods",
+                "PP Potential",
                 "Status",
                 "Links",
             ]
@@ -81,12 +100,15 @@ class OsuComparerGUI(QWidget):
         layout.addWidget(self.table)
 
         self.setLayout(layout)
+        header = self.table.horizontalHeader()
 
         for col in range(self.table.columnCount()):
-            self.table.horizontalHeader().setSectionResizeMode(
-                col, QHeaderView.ResizeMode.Interactive
-        )
-        self.table.horizontalHeader().setMaximumSectionSize(300) 
+            header.setSectionResizeMode(col, QHeaderView.ResizeMode.Interactive)
+        header.setMaximumSectionSize(300)
+        header.setSectionsMovable(True)
+        header.setDragEnabled(True)
+        header.setDragDropMode(QHeaderView.DragDropMode.InternalMove)
+        self.enable_column_hiding()
 
     def append_table_row(self, comp: Comparison, username_a, username_b):
         row = self.table.rowCount()
@@ -96,36 +118,59 @@ class OsuComparerGUI(QWidget):
         score_b = comp.score_b
         bm = score_b.beatmap
         bmset = comp.beatmapset
+        delta = comp.pp_delta
 
-        # Beatmap info
+        # * Beatmap info
         self.table.setItem(row, 0, QTableWidgetItem(f"{bmset.artist} - {bmset.title}"))
-
         self.table.setItem(row, 1, QTableWidgetItem(f"[{bm.version}]"))
 
-        # User A
-        self.table.setItem(
-            row, 2, QTableWidgetItem(f"{score_a.pp:.2f}" if score_a else "N/A")
-        )
-        self.table.setItem(
-            row,
-            3,
-            QTableWidgetItem(f"{score_a.accuracy*100:.2f}%" if score_a else "N/A"),
-        )
-        self.table.setItem(
-            row, 4, QTableWidgetItem(mods_to_str(score_a) if score_a else "N/A")
-        )
+        # * User PP
+        if score_a:
+            item = NumericTableWidgetItem(f"{score_a.pp:.2f}")
+            item.setData(Qt.ItemDataRole.UserRole, score_a.pp)
+        else:
+            item = NumericTableWidgetItem("N/A")
+            item.setData(Qt.ItemDataRole.UserRole, float("-inf"))
+        self.table.setItem(row, 2, item)
 
-        # User B
-        self.table.setItem(row, 5, QTableWidgetItem(f"{score_b.pp:.2f}"))
-        self.table.setItem(row, 6, QTableWidgetItem(f"{score_b.accuracy*100:.2f}%"))
+        item = NumericTableWidgetItem(f"{score_b.pp:.2f}")
+        item.setData(Qt.ItemDataRole.UserRole, score_b.pp)
+        self.table.setItem(row, 3, item)
+
+        # * User Accuracy
+        if score_a:
+            acc_a = score_a.accuracy * 100
+            item = NumericTableWidgetItem(f"{acc_a:.2f}%")
+            item.setData(Qt.ItemDataRole.UserRole, acc_a)
+        else:
+            item = NumericTableWidgetItem("N/A")
+            item.setData(Qt.ItemDataRole.UserRole, float("-inf"))
+        self.table.setItem(row, 4, item)
+
+        acc_b = score_b.accuracy * 100
+        item = NumericTableWidgetItem(f"{acc_b:.2f}%")
+        item.setData(Qt.ItemDataRole.UserRole, acc_b)
+        self.table.setItem(row, 5, item)
+
+        # * PP Potential
+        if delta is not None:
+            item = NumericTableWidgetItem(f"{delta:.2f}")
+            item.setData(Qt.ItemDataRole.UserRole, delta)
+        else:
+            item = NumericTableWidgetItem("N/A")
+            item.setData(Qt.ItemDataRole.UserRole, float("-inf"))
+        self.table.setItem(row, 8, item)
+        
+        # * User Mods
         self.table.setItem(
-            row, 7, QTableWidgetItem(mods_to_str(score_b) if score_b else "N/A")
+            row, 6, QTableWidgetItem(mods_to_str(score_a) if score_a else "N/A")
         )
+        self.table.setItem(row, 7, QTableWidgetItem(mods_to_str(score_b)))
 
-        # Status
-        self.table.setItem(row, 8, QTableWidgetItem(comp.type))
+        # * Status
+        self.table.setItem(row, 9, QTableWidgetItem(comp.type))
 
-        # Links (QLabel with HTML)
+        # * Links (QLabel with HTML)
         links_html = ""
         if score_a:
             links_html += f'<a href="{make_score_url(score_a)}">{username_a}</a> '
@@ -140,7 +185,27 @@ class OsuComparerGUI(QWidget):
         link_label.setOpenExternalLinks(True)
         link_label.setText(links_html)
 
-        self.table.setCellWidget(row, 9, link_label)
+        self.table.setCellWidget(row, 10, link_label)
+
+    def enable_column_hiding(self):
+        header = self.table.horizontalHeader()
+        header.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        header.customContextMenuRequested.connect(self.show_header_menu)
+
+    def show_header_menu(self, pos):
+        header = self.table.horizontalHeader()
+        menu = QMenu(self)
+
+        for col in range(self.table.columnCount()):
+            name = self.table.horizontalHeaderItem(col).text()
+            action = QAction(name, self, checkable=True)
+            action.setChecked(not self.table.isColumnHidden(col))
+            action.toggled.connect(
+                lambda checked, c=col: self.table.setColumnHidden(c, not checked)
+            )
+            menu.addAction(action)
+
+        menu.exec(header.mapToGlobal(pos))
 
     @asyncSlot()
     async def on_compare_clicked(self):
@@ -158,6 +223,7 @@ class OsuComparerGUI(QWidget):
         self.compare_btn.setEnabled(False)
         self.table.setRowCount(0)
         self.progress_bar.setValue(0)
+        self.table.setSortingEnabled(False)
 
         await self.run_comparison(username_a, username_b, limit)
 
@@ -208,6 +274,7 @@ class OsuComparerGUI(QWidget):
         self.table.resizeColumnsToContents()
         self.progress_bar.setValue(0)
         self.compare_btn.setEnabled(True)
+        self.table.setSortingEnabled(True)
 
 
 def main():

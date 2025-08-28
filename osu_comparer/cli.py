@@ -17,8 +17,8 @@ DEFAULT_LIMIT = 100
 
 async def run_comparison():
     try:
-        username_a = input("Insert your username (or type 'exit' to quit): ")
-        if username_a.lower() == "exit":
+        username_a = input("Insert your username (or type 'q' to quit): ")
+        if username_a.lower() == "q":
             return False
         user_id_a = await get_user_id_by_name(username_a)
     except ValueError as e:

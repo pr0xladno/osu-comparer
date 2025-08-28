@@ -19,7 +19,16 @@ async def compare_scores(
 
         if beatmapsets:
             comp.beatmapset = beatmapsets[i]
-
+            
         comparisons.append(comp)
 
+    await calculate_pp_delta(comparisons)
+
     return comparisons
+
+async def calculate_pp_delta(comparisons: List[Comparison]) -> None:
+    for comp in comparisons:
+        if comp.type == "MISSING":
+            comp.pp_delta = comp.score_b.pp
+        else:
+            comp.pp_delta = comp.score_b.pp - comp.score_a.pp
