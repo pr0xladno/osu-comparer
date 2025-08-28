@@ -48,8 +48,6 @@ async def run_comparison():
     print(f"Fetching scores for {username_a} on {len(beatmaps_b)} beatmaps...")
     tasks = [get_user_score_on_beatmap(user_id_a, beatmap.id) for beatmap in beatmaps_b]
     scores_a = await tqdm_asyncio.gather(*tasks, desc="Fetching user scores", total=len(tasks))
-
-    print("\n")
     
     await compare_scores(username_a, username_b, scores_a, scores_b)
     return True
