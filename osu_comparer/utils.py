@@ -1,5 +1,6 @@
 from ossapi import Score
 
+
 def make_score_url(score: Score) -> str:
     """Create a URL to the score on the osu! website
 
@@ -16,7 +17,8 @@ def make_score_url(score: Score) -> str:
         return f"https://osu.ppy.sh/scores/{mode}/{score.legacy_score_id}"
     return "N/A"
 
-def mods_to_str(mods) -> str:
-    if mods:
-        return "".join(mod.acronym for mod in mods)
+
+def mods_to_str(score: Score) -> str:
+    if score and score.mods:
+        return "".join(mod.acronym for mod in score.mods)
     return "NM"

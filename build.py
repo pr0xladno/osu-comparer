@@ -14,8 +14,14 @@ except Exception as e:
     print(f"Cannot get version from git: {e}")
     version = "v0.0.0"
 
-exe_name = f"osu-comparer-{version}"
+exe_name_cli = f"osu-comparer-{version}-cli"
+exe_name_gui = f"osu-comparer-{version}-gui"
 
-cmd = f'pyinstaller --onefile --add-data ".env;." --name {exe_name} main.py'
+commands = [
+    f'pyinstaller --onefile --console --add-data ".env;." --name "{exe_name_cli}" osu_comparer/cli.py',
+    f'pyinstaller --onefile --noconsole --add-data ".env;." --name "{exe_name_gui}" osu_comparer/gui.py'
+]
 
-subprocess.run(cmd, shell=True, check=True)
+for cmd in commands:
+    print(f"Running: {cmd}")
+    subprocess.run(cmd, shell=True, check=True)
