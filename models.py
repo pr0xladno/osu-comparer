@@ -1,10 +1,11 @@
-from typing import Optional
-from ossapi import Beatmapset, Score
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
+from ossapi import Score
+from typing import Literal, Optional
 
 
-class BeatmapComparison(BaseModel):
-    type: str  # "missing" or "weaker"
-    beatmapset: Beatmapset
+class Comparison(BaseModel):
+    type: Literal["missing", "weaker", "stronger"]
     score_a: Optional[Score] = None
-    score_b: Optional[Score] = None
+    score_b: Score
+    
+    model_config = ConfigDict(arbitrary_types_allowed=True)
